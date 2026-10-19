@@ -1,103 +1,63 @@
-/* =============== LIGHT MODE =============== */
-const toggleButton = document.getElementById("theme-toggle");
-const themeIcon = document.getElementById("theme-icon");
-const favicon = document.getElementById("favicon");
+(() => {
+  const root = document.documentElement;
+  const themeButton = document.getElementById('theme-toggle');
+  const themeSymbol = document.getElementById('theme-symbol');
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem('theme'); } catch { /* Storage can be disabled. */ }
 
-// Function to set favicon based on system theme
-function setFaviconBasedOnSystemTheme() {
-  const isSystemLight = window.matchMedia(
-    "(prefers-color-scheme: light)"
-  ).matches;
-  favicon.href = isSystemLight
-    ? "assets/images/favicon-light.svg"
-    : "assets/images/favicon-dark.svg";
-}
-
-// Set the favicon on page load
-setFaviconBasedOnSystemTheme();
-
-// Listen for system theme changes
-window
-  .matchMedia("(prefers-color-scheme: light)")
-  .addEventListener("change", setFaviconBasedOnSystemTheme);
-
-// Apply system theme or saved theme on load
-document.addEventListener("DOMContentLoaded", () => {
-  const isLightMode =
-    localStorage.getItem("theme") === "light" ||
-    (!localStorage.getItem("theme") &&
-      window.matchMedia("(prefers-color-scheme: light)").matches);
-
-  document.body.classList.toggle("light-mode", isLightMode);
-  themeIcon.className = isLightMode ? "fas fa-sun" : "fas fa-moon";
-});
-
-// Toggle theme and update icon
-toggleButton.addEventListener("click", () => {
-  const isLightMode = document.body.classList.toggle("light-mode");
-  localStorage.setItem("theme", isLightMode ? "light" : "dark");
-  themeIcon.className = isLightMode ? "fas fa-sun" : "fas fa-moon";
-});
-
-/* =============== SHARE MODE =============== */
-// Detect if the device supports Web Share API
-if (navigator.share) {
-  document.getElementById("shareBtn").addEventListener("click", function () {
-    navigator
-      .share({
-        title: "Nidhin Narayanan",
-        url: "https://nnidhin.netlify.app/",
-      })
-      .catch((err) => {
-        console.error("Error sharing: ", err);
-      });
-  });
-} else {
-  document.getElementById("shareBtn").addEventListener("click", function () {
-    new bootstrap.Modal(document.getElementById("shareModal")).show();
-  });
-}
-
-function shareOn(platform) {
-  const shareUrl = "https://nnidhin.netlify.app/";
-  let shareURL = "";
-  // Set the URL input value for copying
-  document.getElementById("shareUrl").value = shareUrl;
-
-  switch (platform) {
-    case "facebook":
-      shareURL = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
-      break;
-    case "twitter":
-      shareURL = `https://twitter.com/intent/tweet?url=${shareUrl}`;
-      break;
-    case "linkedin":
-      shareURL = `https://www.linkedin.com/shareArticle?url=${shareUrl}`;
-      break;
-    case "whatsapp":
-      shareURL = `https://wa.me/?text=${shareUrl}`;
-      break;
-    case "email":
-      shareURL = `mailto:?subject=Check this out&body=${shareUrl}`;
-      break;
-    default:
-      break;
+  function applyTheme(theme) {
+    const isDark = theme === 'dark';
+    root.dataset.theme = isDark ? 'dark' : 'light';
+    themeButton.setAttribute('aria-pressed', String(isDark));
+    themeButton.setAttribute('aria-label', `Switch to ${isDark ? 'light' : 'dark'} theme`);
+    themeSymbol.setAttribute('href', isDark ? '#sun' : '#moon');
+    document.querySelector('meta[name="theme-color"]').content = isDark ? '#1b201b' : '#f5f3ed';
   }
-  window.open(shareURL, "_blank");
-}
+  applyTheme(savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : systemTheme.matches ? 'dark' : 'light');
+  themeButton.addEventListener('click', () => {
+    savedTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(savedTheme);
+    try { localStorage.setItem('theme', savedTheme); } catch { /* Keep the session choice. */ }
+  });
+  systemTheme.addEventListener('change', (event) => {
+    if (!savedTheme) applyTheme(event.matches ? 'dark' : 'light');
+  });
 
-// Initialize Clipboard.js
-var clipboard = new ClipboardJS("#copyBtn");
-clipboard.on("success", function (e) {
-  var copyBtn = document.getElementById("copyBtn");
-  copyBtn.classList.add("success");
-  copyBtn.innerHTML = '<i class="fas fa-check me-2"></i> Copied!';
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const dialog = document.getElementById('share-dialog');
+  const shareInput = document.getElementById('share-url');
+  const copyButton = document.getElementById('copy-link');
+  const copyStatus = document.getElementById('copy-status');
+  // Share the deployed page address, including its path, without tracking parameters.
+  const pageUrl = new URL(window.location.href);
+  pageUrl.search = '';
+  pageUrl.hash = '';
+  const shareUrl = pageUrl.href;
+  shareInput.value = shareUrl;
+  document.getElementById('share-email').href = `mailto:?subject=${encodeURIComponent('Nidhin Narayanan | All my links')}&body=${encodeURIComponent(shareUrl)}`;
 
-  setTimeout(function () {
-    copyBtn.classList.remove("success");
-    copyBtn.innerHTML = '<i class="fas fa-copy me-2"></i> Copy';
-  }, 2000); // Reset the button after 2 seconds
-});
-clipboard.on("error", function (e) {
-  alert("Failed to copy URL.");
-});
+  function openShareDialog() {
+    copyStatus.textContent = '';
+    copyButton.textContent = 'Copy link';
+    if (!dialog.open) dialog.showModal();
+  }
+  document.getElementById('shareBtn').addEventListener('click', openShareDialog);
+  document.getElementById('close-share').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    const bounds = dialog.getBoundingClientRect();
+    if (event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) dialog.close();
+  });
+  copyButton.addEventListener('click', async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(shareUrl);
+      copyButton.textContent = 'Copied!';
+      copyStatus.textContent = 'Link copied. Ready to share.';
+    } catch {
+      shareInput.focus();
+      shareInput.select();
+      copyStatus.textContent = 'Select and copy the link above to share it.';
+    }
+  });
+})();
